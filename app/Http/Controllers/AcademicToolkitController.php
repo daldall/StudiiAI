@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Services\GeminiService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use RuntimeException;
@@ -19,78 +18,28 @@ class AcademicToolkitController extends Controller
     public function index(Request $request): View
     {
         return view('dashboard', [
-            'apiKeySource' => $this->apiKeySource($request),
-            'isConfigured' => $this->hasApiKey($request),
+            'isConfigured' => $this->hasApiKey(),
         ]);
-    }
-
-    public function settings(Request $request): View
-    {
-        return view('settings', [
-            'currentKey' => $request->session()->get('gemini_api_key', ''),
-            'apiKeySource' => $this->apiKeySource($request),
-        ]);
-    }
-
-    public function updateSettings(Request $request): RedirectResponse
-    {
-        $validated = $request->validate([
-            'gemini_api_key' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $key = trim((string) ($validated['gemini_api_key'] ?? ''));
-
-        if ($key === '') {
-            $request->session()->forget('gemini_api_key');
-
-            return redirect()->route('settings')->with('status', 'API key sesi dihapus.');
-        }
-
-        $request->session()->put('gemini_api_key', $key);
-
-        return redirect()->route('settings')->with('status', 'API key tersimpan untuk sesi browser ini.');
-    }
-
-    public function clearSettings(Request $request): RedirectResponse
-    {
-        $request->session()->forget('gemini_api_key');
-
-        return redirect()->route('settings')->with('status', 'API key berhasil dihapus.');
     }
 
     public function textTools(Request $request): JsonResponse
     {
-        $validated = $request->validate([
+        $request->validate([
             'pdf_file' => ['required', 'file', 'mimes:pdf', 'max:10240'],
-            'mode' => ['required', 'in:clean,summary'],
         ]);
 
+        $pdfFile = $request->file('pdf_file');
+
         try {
-            $pdfFile = $request->file('pdf_file');
-            $extractedText = $this->extractTextFromPdf($pdfFile->getRealPath());
-            $cleanedText = $this->gemini->cleanPdfText($extractedText);
+            $text = $this->extractTextFromPdf($pdfFile->getRealPath());
+            $summary = $this->gemini->summarizeText($text, $this->apiKey());
         } catch (RuntimeException $exception) {
-            return response()->json([
-                'message' => $exception->getMessage(),
-            ], 422);
+            return response()->json(['message' => $exception->getMessage()], 422);
         }
-
-        if ($validated['mode'] === 'clean') {
-            return response()->json([
-                'message' => 'Teks berhasil dibersihkan.',
-                'data' => [
-                    'cleaned_text' => $cleanedText,
-                    'source_name' => $pdfFile->getClientOriginalName(),
-                ],
-            ]);
-        }
-
-        $summary = $this->gemini->summarizeText($cleanedText, $this->apiKey($request));
 
         return response()->json([
             'message' => 'Rangkuman berhasil dibuat.',
             'data' => [
-                'cleaned_text' => $cleanedText,
                 'summary' => $summary,
                 'source_name' => $pdfFile->getClientOriginalName(),
             ],
@@ -104,7 +53,7 @@ class AcademicToolkitController extends Controller
             'mode' => ['required', 'in:flashcards,quiz'],
         ]);
 
-        $apiKey = $this->apiKey($request);
+        $apiKey = $this->apiKey();
 
         if ($validated['mode'] === 'quiz') {
             $quiz = $this->gemini->generateQuiz($validated['topic'], $apiKey);
@@ -136,7 +85,7 @@ class AcademicToolkitController extends Controller
             'format' => ['required', 'in:APA 7th,MLA 9,IEEE,Harvard'],
         ]);
 
-        $citation = $this->gemini->generateCitation($validated['source_text'], $validated['format'], $this->apiKey($request));
+        $citation = $this->gemini->generateCitation($validated['source_text'], $validated['format'], $this->apiKey());
 
         return response()->json([
             'message' => 'Sitasi berhasil dibuat.',
@@ -159,7 +108,7 @@ class AcademicToolkitController extends Controller
             $validated['items_text'],
             $validated['difficulty'],
             (int) $validated['daily_hours'],
-            $this->apiKey($request)
+            $this->apiKey()
         );
 
         return response()->json([
@@ -168,35 +117,16 @@ class AcademicToolkitController extends Controller
         ]);
     }
 
-    private function apiKey(Request $request): ?string
+    private function apiKey(): ?string
     {
-        $sessionKey = trim((string) $request->session()->get('gemini_api_key', ''));
-
-        if ($sessionKey !== '') {
-            return $sessionKey;
-        }
-
         $configKey = trim((string) config('services.gemini.api_key', ''));
 
         return $configKey !== '' ? $configKey : null;
     }
 
-    private function hasApiKey(Request $request): bool
+    private function hasApiKey(): bool
     {
-        return $this->apiKey($request) !== null;
-    }
-
-    private function apiKeySource(Request $request): string
-    {
-        if (trim((string) $request->session()->get('gemini_api_key', '')) !== '') {
-            return 'session';
-        }
-
-        if (trim((string) config('services.gemini.api_key', '')) !== '') {
-            return 'env';
-        }
-
-        return 'none';
+        return $this->apiKey() !== null;
     }
 
     private function extractTextFromPdf(string $pdfPath): string

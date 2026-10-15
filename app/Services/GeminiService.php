@@ -2,7 +2,10 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -11,16 +14,17 @@ class GeminiService
     /**
      * Batas karakter materi yang dikirim ke model (cukup besar untuk modul/bab panjang).
      */
-    private const MAX_INPUT_CHARS = 80000;
+    private const MAX_INPUT_CHARS = 120000;
 
     private const SYSTEM_PERSONA = <<<TXT
 Kamu adalah tutor akademik yang sabar, akurat, dan berpengalaman membimbing mahasiswa S1 di Indonesia.
 Prinsip kerja:
-1. AKURAT: hanya gunakan informasi dari materi yang diberikan. Jangan mengarang fakta, angka, nama, atau rumus. Jika materi tidak cukup, katakan terbatas pada isi materi.
-2. MUDAH DIPAHAMI: pakai bahasa Indonesia sehari-hari yang rapi. Istilah teknis tetap ditulis (boleh bahasa Inggris) lalu dijelaskan singkat.
-3. BERGUNA UNTUK BELAJAR & UJIAN: utamakan konsep inti, hubungan sebab-akibat, langkah/proses, rumus, perbandingan, dan contoh konkret.
-4. TERSTRUKTUR: urutkan dari gambaran besar ke detail. Tiap poin harus berdiri sendiri dan tidak mengulang poin lain.
-5. Jawab HANYA dengan JSON valid sesuai format yang diminta, tanpa markdown atau teks tambahan.
+1. AKURAT: jika input berupa materi/catatan, hanya gunakan informasi dari materi itu. Jangan mengarang fakta, angka, nama, atau rumus. Jika materi tidak cukup, katakan terbatas pada isi materi.
+2. TOPIK SINGKAT: jika input hanya berupa nama topik pendek tanpa materi, gunakan pengetahuan akademik umum yang baku dan benar (definisi standar, konsep inti, rumus yang lazim). Jangan mengarang; jika tidak yakin, pilih hal yang paling mapan.
+3. MUDAH DIPAHAMI: pakai bahasa Indonesia sehari-hari yang rapi. Istilah teknis tetap ditulis (boleh bahasa Inggris) lalu dijelaskan singkat.
+4. LENGKAP & BERGUNA UNTUK BELAJAR/UJIAN: cakup seluruh bagian penting dari awal sampai akhir (jangan hanya bagian awal). Utamakan konsep inti, hubungan sebab-akibat, langkah/proses, rumus, perbandingan, dan contoh konkret.
+5. TERSTRUKTUR: urutkan dari gambaran besar ke detail. Tiap poin harus berdiri sendiri dan tidak mengulang poin lain.
+6. Jawab HANYA dengan JSON valid sesuai format yang diminta, tanpa markdown atau teks tambahan. Isi semua field yang diminta dengan konten bermakna, jangan dikosongkan.
 TXT;
 
     // ---------------------------------------------------------------------
@@ -88,13 +92,20 @@ TXT;
             return $fallback;
         }
 
+        // Jumlah poin menyesuaikan panjang materi agar materi panjang tidak diringkas terlalu tipis.
+        $tier = $this->sizeTier($preparedText, 150, 1200);
+        $bulletRange = ['3-5', '6-8', '8-12'][$tier];
+        $termRange = ['3-5', '5-8', '8-10'][$tier];
+        $questionRange = ['3-4', '4-5', '5-6'][$tier];
+        $summarySentences = ['4-6', '6-8', '8-10'][$tier];
+
         $prompt = <<<PROMPT
-Buat rangkuman belajar dari materi di bawah untuk mahasiswa yang baru pertama kali membacanya.
+Buat rangkuman belajar yang LENGKAP dari materi di bawah untuk mahasiswa yang baru pertama kali membacanya.
 
 Format JSON:
 {
   "title": "judul singkat 3-6 kata yang mewakili topik (bukan salinan baris pertama)",
-  "plain_summary": "gambaran besar 6-8 kalimat: apa topiknya, kenapa penting, bagaimana alurnya, dan kesimpulan utamanya",
+  "plain_summary": "gambaran besar {$summarySentences} kalimat: apa topiknya, kenapa penting, bagaimana alurnya, dan kesimpulan utamanya",
   "bullets": [
     {"point": "inti poin (maks 1 kalimat pendek)", "explanation": "penjelasan 2-4 kalimat: arti, alasan/cara kerja, dan contoh kecil bila membantu"}
   ],
@@ -105,10 +116,11 @@ Format JSON:
 }
 
 Aturan:
-- 6-10 poin untuk materi panjang, 3-5 poin untuk materi pendek. Urutkan sesuai alur materi.
-- 3-8 key_terms, hanya istilah yang benar-benar ada di materi.
-- 3-5 review_questions yang menguji pemahaman (bukan sekadar hafalan judul).
-- Pertahankan rumus, angka, nama tokoh, dan definisi penting persis seperti di materi.
+- Buat {$bulletRange} poin. Urutkan sesuai alur materi dan pastikan SELURUH bagian materi (awal, tengah, akhir) terwakili secara proporsional.
+- Tiap poin harus menjawab: apa itu, kenapa/bagaimana, dan (jika ada di materi) contoh atau rumusnya.
+- Buat {$termRange} key_terms, hanya istilah yang benar-benar ada di materi.
+- Buat {$questionRange} review_questions yang menguji pemahaman (bukan sekadar hafalan judul).
+- Pertahankan rumus, angka, nama tokoh, tanggal, dan definisi penting persis seperti di materi.
 - Jangan menyalin kalimat panjang dari sumber; jelaskan dengan kata sendiri.
 - Variasikan pembuka kalimat, jangan memakai pola yang sama berulang.
 - Abaikan nomor halaman, header/footer, dan sisa format PDF.
@@ -135,9 +147,12 @@ PROMPT;
             return $fallback;
         }
 
+        $tier = $this->sizeTier($topic, 40, 600);
+        $cardRange = ['8-10', '10-14', '14-20'][$tier];
+
         $prompt = <<<PROMPT
-Buat flashcards untuk belajar dan persiapan ujian dari input berikut.
-Input bisa berupa nama topik singkat ATAU materi/catatan panjang. Jika berupa materi, ambil isi kartu dari materi itu saja.
+Buat flashcards LENGKAP untuk belajar dan persiapan ujian dari input berikut.
+Input bisa berupa nama topik singkat ATAU materi/catatan panjang. Jika berupa materi, ambil isi kartu dari materi itu saja dan cakup seluruh bagian pentingnya. Jika hanya nama topik, gunakan pengetahuan akademik yang baku dan benar.
 
 Format JSON:
 {
@@ -147,10 +162,10 @@ Format JSON:
 }
 
 Aturan:
-- Buat 8-12 kartu (6-8 jika input sangat pendek).
+- Buat {$cardRange} kartu.
 - Campurkan jenis kartu: definisi, alasan "mengapa", proses/langkah, perbandingan dua konsep, rumus, dan contoh penerapan.
 - Satu kartu = satu ide. Sisi depan harus spesifik dan bisa dijawab tanpa konteks tambahan.
-- Sisi belakang berisi jawaban yang bisa langsung dihafal, tanpa basa-basi.
+- Sisi belakang berisi jawaban yang bisa langsung dihafal; sertakan alasan singkat atau contoh bila membantu mengingat.
 - Jangan membuat kartu duplikat atau pertanyaan yang jawabannya hanya "ya/tidak".
 - Bahasa Indonesia natural; istilah teknis boleh tetap dalam bahasa aslinya.
 
@@ -177,9 +192,12 @@ PROMPT;
             return $fallback;
         }
 
+        $tier = $this->sizeTier($topic, 40, 600);
+        $questionRange = ['6-8', '8-10', '10-12'][$tier];
+
         $prompt = <<<PROMPT
 Buat kuis pilihan ganda berkualitas ujian kampus dari input berikut.
-Input bisa berupa topik singkat ATAU materi panjang. Jika berupa materi, soal harus berdasarkan materi itu.
+Input bisa berupa topik singkat ATAU materi panjang. Jika berupa materi, soal harus berdasarkan materi itu dan tersebar merata di seluruh bagiannya. Jika hanya nama topik, gunakan pengetahuan akademik yang baku dan benar.
 
 Format JSON:
 {
@@ -188,14 +206,14 @@ Format JSON:
       "question": "pertanyaan",
       "options": ["pilihan 1", "pilihan 2", "pilihan 3", "pilihan 4"],
       "answer_index": 0,
-      "explanation": "mengapa jawaban benar itu benar dan mengapa pengecoh salah (2-3 kalimat)"
+      "explanation": "mengapa jawaban benar itu benar dan mengapa pengecoh salah (2-4 kalimat)"
     }
   ]
 }
 
 Aturan:
-- Buat 6-8 soal dengan tingkat berbeda: sekitar 2 mudah (ingatan), 3 sedang (pemahaman), 2 sulit (penerapan/analisis kasus singkat).
-- Tepat 4 pilihan, tepat 1 jawaban benar. Pengecoh harus masuk akal (kesalahpahaman umum), bukan jawaban konyol.
+- Buat {$questionRange} soal dengan tingkat berbeda: sekitar 30% mudah (ingatan), 40% sedang (pemahaman), 30% sulit (penerapan/analisis kasus singkat).
+- Tepat 4 pilihan yang semuanya berbeda, tepat 1 jawaban benar. answer_index adalah posisi jawaban benar (mulai dari 0). Pengecoh harus masuk akal (kesalahpahaman umum), bukan jawaban konyol.
 - Panjang pilihan seragam; jangan pakai "semua benar" atau "semua salah".
 - Hindari pertanyaan ambigu dan hindari mengulang konsep yang sama.
 - Pilihan ditulis tanpa awalan "A.", "B.", dst.
@@ -233,10 +251,12 @@ Format JSON:
 }
 
 Aturan:
-- Ikuti aturan penulisan {$format} edisi terbaru (urutan unsur, tanda baca, huruf miring ditulis dengan *tanda bintang*, kapitalisasi judul).
+- Ikuti aturan penulisan {$format} edisi terbaru (urutan unsur, tanda baca, huruf miring ditulis dengan *tanda bintang*, kapitalisasi judul, format nama penulis, dan penanganan banyak penulis).
+- Kenali jenis sumber (buku, artikel jurnal, situs web, laporan, skripsi, dll.) lalu pakai pola yang sesuai untuk jenis itu.
 - JANGAN mengarang penulis, tahun, penerbit, volume, halaman, DOI, atau URL yang tidak ada di sumber.
 - Jika ada unsur wajib yang tidak tersedia, tulis placeholder seperti [Tahun], [Penerbit], atau [Nama Penulis] agar mudah dilengkapi.
 - Jika sumber berupa URL saja, gunakan hanya info yang bisa disimpulkan dari URL dan beri placeholder untuk sisanya.
+- Jika sumber berbahasa Indonesia, gunakan istilah Indonesia untuk kata penghubung (mis. "Diakses dari") bila sesuai dengan format.
 - Hanya satu sitasi, tanpa penjelasan tambahan.
 
 Informasi sumber:
@@ -263,12 +283,15 @@ PROMPT;
             return $fallback;
         }
 
+        $today = now()->format('Y-m-d');
+
         $prompt = <<<PROMPT
-Buat jadwal belajar harian yang realistis untuk mahasiswa berdasarkan daftar tugas/ujian berikut.
+Buat jadwal belajar harian yang realistis dan lengkap untuk mahasiswa berdasarkan daftar tugas/ujian berikut.
+Tanggal hari ini: {$today}.
 
 Format JSON:
 {
-  "summary": "ringkasan strategi 1-2 kalimat",
+  "summary": "ringkasan strategi 2-3 kalimat",
   "days": [
     {
       "day": "Hari 1",
@@ -281,9 +304,10 @@ Format JSON:
 
 Aturan:
 - Tingkat kesulitan: {$difficulty}. Waktu belajar: sekitar {$dailyHours} jam per hari (estimated_hours tidak boleh melebihi {$dailyHours}).
-- Jika ada tenggat/tanggal ujian di daftar, susun mundur dari tenggat itu dan prioritaskan yang lebih dekat atau lebih sulit.
+- Jika ada tenggat/tanggal ujian di daftar, hitung sisa hari dari tanggal hari ini, susun mundur dari tenggat itu, dan prioritaskan yang lebih dekat atau lebih sulit. Jika tenggat sangat dekat, padatkan jadwal secara realistis.
+- Pastikan SEMUA item di daftar mendapat jatah waktu.
 - Alur: pahami konsep -> latihan soal -> evaluasi kesalahan -> ulangan terakhir. Sisakan hari terakhir untuk review ringan.
-- Tiap tugas harus spesifik dan terukur (contoh: "Kerjakan 10 soal bab 3 lalu catat yang salah"), bukan "belajar bab 3".
+- Tiap tugas harus spesifik dan terukur, dengan estimasi durasi di akhir kalimat (contoh: "Kerjakan 10 soal bab 3 lalu catat yang salah (± 45 menit)"), bukan "belajar bab 3".
 - Sertakan jeda/istirahat singkat pada hari yang padat dan teknik belajar yang cocok (active recall, spaced repetition, pomodoro).
 - Maksimal 14 hari, 3-5 tugas per hari.
 
@@ -303,54 +327,122 @@ PROMPT;
 
     private function callGemini(string $apiKey, string $prompt, ?array $schema = null, float $temperature = 0.3): ?array
     {
+        // Dua percobaan HTTP + pemrosesan bisa melebihi batas default 30 detik.
+        @set_time_limit(240);
+
         $model = (string) (config('services.gemini.model') ?: 'gemini-2.5-flash');
 
-        $generationConfig = [
-            'temperature' => $temperature,
-            'topP' => 0.9,
-            'maxOutputTokens' => 8192,
-            'responseMimeType' => 'application/json',
+        // thinkingConfig hanya dikirim untuk keluarga 2.5 agar model lain tidak menolak request.
+        $supportsThinking = str_contains($model, 'gemini-2.5');
+
+        // Percobaan 2 hanya dipakai bila jawaban terpotong/JSON tidak valid:
+        // batas token lebih besar dan thinking dikurangi agar token tersisa untuk jawaban.
+        $attempts = [
+            ['maxOutputTokens' => 16384, 'thinkingBudget' => 2048],
+            ['maxOutputTokens' => 32768, 'thinkingBudget' => 512],
         ];
 
-        if ($schema !== null) {
-            $generationConfig['responseSchema'] = $schema;
-        }
+        foreach ($attempts as $attempt) {
+            $generationConfig = [
+                'temperature' => $temperature,
+                'topP' => 0.9,
+                'maxOutputTokens' => $attempt['maxOutputTokens'],
+                'responseMimeType' => 'application/json',
+            ];
 
-        $payload = [
-            'systemInstruction' => [
-                'parts' => [['text' => self::SYSTEM_PERSONA]],
-            ],
-            'contents' => [
-                [
-                    'role' => 'user',
-                    'parts' => [['text' => $prompt]],
+            if ($supportsThinking) {
+                $generationConfig['thinkingConfig'] = ['thinkingBudget' => $attempt['thinkingBudget']];
+            }
+
+            if ($schema !== null) {
+                $generationConfig['responseSchema'] = $schema;
+            }
+
+            $payload = [
+                'systemInstruction' => [
+                    'parts' => [['text' => self::SYSTEM_PERSONA]],
                 ],
-            ],
-            'generationConfig' => $generationConfig,
-        ];
+                'contents' => [
+                    [
+                        'role' => 'user',
+                        'parts' => [['text' => $prompt]],
+                    ],
+                ],
+                'generationConfig' => $generationConfig,
+            ];
 
-        try {
-            $response = Http::timeout(90)
-                ->retry(2, 800, fn ($exception, $request) => true, throw: false)
-                ->acceptJson()
-                ->asJson()
-                ->withHeaders(['x-goog-api-key' => $apiKey])
-                ->post("https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent", $payload);
+            try {
+                $response = Http::timeout(75)
+                    ->retry(2, 800, function ($exception) {
+                        if ($exception instanceof ConnectionException) {
+                            return true;
+                        }
 
-            if (!$response->successful()) {
+                        if ($exception instanceof RequestException) {
+                            return in_array($exception->response->status(), [429, 500, 502, 503, 504], true);
+                        }
+
+                        return false;
+                    }, throw: false)
+                    ->acceptJson()
+                    ->asJson()
+                    ->withHeaders(['x-goog-api-key' => $apiKey])
+                    ->post("https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent", $payload);
+
+                if (!$response->successful()) {
+                    Log::warning('Gemini request gagal', [
+                        'status' => $response->status(),
+                        'body' => Str::limit($response->body(), 300),
+                    ]);
+
+                    return null;
+                }
+
+                $json = $response->json();
+                $finishReason = (string) data_get($json, 'candidates.0.finishReason', '');
+                $text = $this->extractResponseText($json);
+                $decoded = $text !== '' ? $this->decodeJsonResponse($text) : null;
+
+                if ($decoded !== null) {
+                    return $decoded;
+                }
+
+                Log::warning('Gemini mengembalikan JSON tidak valid atau kosong', [
+                    'finishReason' => $finishReason,
+                    'attempt_max_tokens' => $attempt['maxOutputTokens'],
+                ]);
+
+                // Diblokir oleh filter: mengulang tidak akan membantu.
+                if (in_array($finishReason, ['SAFETY', 'RECITATION', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII'], true)) {
+                    return null;
+                }
+            } catch (Throwable $e) {
+                Log::warning('Gemini exception: ' . $e->getMessage());
+
                 return null;
             }
-
-            $text = data_get($response->json(), 'candidates.0.content.parts.0.text');
-
-            if (!is_string($text) || trim($text) === '') {
-                return null;
-            }
-
-            return $this->decodeJsonResponse($text);
-        } catch (Throwable) {
-            return null;
         }
+
+        return null;
+    }
+
+    /**
+     * Gabungkan semua bagian teks jawaban (mengabaikan bagian "thought" bila ada).
+     */
+    private function extractResponseText(mixed $json): string
+    {
+        $parts = data_get($json, 'candidates.0.content.parts', []);
+        $text = '';
+
+        foreach ((array) $parts as $part) {
+            if (!is_array($part) || !empty($part['thought'])) {
+                continue;
+            }
+
+            $text .= (string) ($part['text'] ?? '');
+        }
+
+        return trim($text);
     }
 
     private function decodeJsonResponse(string $text): ?array
@@ -522,7 +614,7 @@ PROMPT;
                 'explanation' => $explanation !== '' ? $explanation : 'Poin ini merupakan bagian inti dari materi.',
             ];
 
-            if (count($normalized) >= 10) {
+            if (count($normalized) >= 12) {
                 break;
             }
         }
@@ -554,8 +646,8 @@ PROMPT;
             'title' => $title !== '' ? $title : ($fallback['title'] ?? 'Ringkasan'),
             'plain_summary' => $plainSummary !== '' ? $plainSummary : $this->composePlainSummary($normalized),
             'bullets' => $normalized,
-            'key_terms' => array_slice($keyTerms, 0, 8),
-            'review_questions' => array_slice($questions, 0, 5),
+            'key_terms' => array_slice($keyTerms, 0, 10),
+            'review_questions' => array_slice($questions, 0, 6),
         ];
     }
 
@@ -585,7 +677,7 @@ PROMPT;
             $result[] = ['front' => $front, 'back' => $back];
         }
 
-        return array_slice($result, 0, 15);
+        return array_slice($result, 0, 20);
     }
 
     private function normalizeQuiz(mixed $questions): array
@@ -595,6 +687,7 @@ PROMPT;
         }
 
         $result = [];
+        $seen = [];
 
         foreach ($questions as $item) {
             if (!is_array($item)) {
@@ -602,30 +695,50 @@ PROMPT;
             }
 
             $question = $this->cleanInline((string) ($item['question'] ?? ''));
-            $options = array_values(array_filter(array_map(
+
+            // Bersihkan pilihan TANPA menggeser indeks, supaya answer_index tetap menunjuk jawaban yang benar.
+            $rawOptions = array_map(
                 fn ($option) => trim(preg_replace('/^[A-Da-d][.)]\s+/', '', $this->cleanInline((string) $option)) ?? ''),
-                (array) ($item['options'] ?? [])
-            ), fn ($option) => $option !== ''));
+                array_values((array) ($item['options'] ?? []))
+            );
             $answerIndex = (int) ($item['answer_index'] ?? -1);
 
-            if ($question === '' || count($options) < 2 || $answerIndex < 0 || $answerIndex >= count($options)) {
+            if ($question === '' || $answerIndex < 0 || !isset($rawOptions[$answerIndex]) || $rawOptions[$answerIndex] === '') {
+                continue;
+            }
+
+            $questionKey = mb_strtolower($question);
+            if (isset($seen[$questionKey])) {
+                continue;
+            }
+
+            $correct = $rawOptions[$answerIndex];
+            $options = array_values(array_unique(array_filter($rawOptions, fn ($option) => $option !== '')));
+
+            if (count($options) < 2) {
                 continue;
             }
 
             // Acak urutan pilihan agar jawaban benar tidak selalu di posisi yang sama.
-            $correct = $options[$answerIndex];
             shuffle($options);
-            $answerIndex = (int) array_search($correct, $options, true);
+            $newIndex = array_search($correct, $options, true);
 
+            if ($newIndex === false) {
+                continue;
+            }
+
+            $explanation = $this->cleanInline((string) ($item['explanation'] ?? ''));
+
+            $seen[$questionKey] = true;
             $result[] = [
                 'question' => $question,
                 'options' => $options,
-                'answer_index' => $answerIndex,
-                'explanation' => $this->cleanInline((string) ($item['explanation'] ?? '')),
+                'answer_index' => (int) $newIndex,
+                'explanation' => $explanation !== '' ? $explanation : 'Jawaban yang tepat adalah: ' . $correct . '.',
             ];
         }
 
-        return array_slice($result, 0, 10);
+        return array_slice($result, 0, 12);
     }
 
     private function normalizeStudyPlan(?array $plan, int $dailyHours): ?array
@@ -682,7 +795,34 @@ PROMPT;
     {
         $text = trim($text);
 
-        return mb_strlen($text) > $max ? mb_substr($text, 0, $max) : $text;
+        if (mb_strlen($text) <= $max) {
+            return $text;
+        }
+
+        $cut = mb_substr($text, 0, $max);
+
+        // Potong di batas paragraf/kalimat terdekat agar tidak berhenti di tengah kata.
+        $position = max((int) mb_strrpos($cut, "\n\n"), (int) mb_strrpos($cut, '. '));
+
+        if ($position > (int) ($max * 0.9)) {
+            $cut = mb_substr($cut, 0, $position + 1);
+        }
+
+        return trim($cut);
+    }
+
+    /**
+     * Tentukan skala input: 0 = pendek, 1 = sedang, 2 = panjang (berdasarkan jumlah kata).
+     */
+    private function sizeTier(string $text, int $shortMaxWords, int $mediumMaxWords): int
+    {
+        $words = count(preg_split('/\s+/u', trim($text), -1, PREG_SPLIT_NO_EMPTY) ?: []);
+
+        if ($words < $shortMaxWords) {
+            return 0;
+        }
+
+        return $words < $mediumMaxWords ? 1 : 2;
     }
 
     // ---------------------------------------------------------------------

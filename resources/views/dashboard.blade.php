@@ -9,24 +9,15 @@
                     <div>
                         <div class="text-uppercase text-muted small fw-semibold letter-spacing">Academic workflow</div>
                         <h1 class="display-6 fw-semibold mb-2">Dashboard akademik yang tenang, cepat, dan siap pakai.</h1>
-                        <p class="text-muted mb-0 max-w-prose">Unggah PDF langsung untuk dibersihkan dan diringkas, lalu lanjutkan ke flashcards, kuis, sitasi, dan jadwal belajar yang realistis.</p>
+                        <p class="text-muted mb-0 max-w-prose">Unggah materi untuk diringkas, lalu lanjutkan ke flashcards, kuis, sitasi, jadwal belajar, dan riwayat hasil yang bisa dibuka ulang.</p>
                     </div>
                     <div class="status-pill {{ $isConfigured ? 'status-ready' : 'status-warning' }}">
                         <span class="status-dot"></span>
-                        <span>{{ $isConfigured ? 'Gemini siap digunakan' : 'API key belum diatur' }}</span>
+                        <span>{{ $isConfigured ? 'Gemini siap digunakan' : 'Mode fallback aktif' }}</span>
                     </div>
                 </div>
 
                 <div class="row g-3">
-                    <div class="col-md-4">
-                        <div class="stat-card">
-                            <div class="stat-icon"><i class="bi bi-file-earmark-text"></i></div>
-                            <div>
-                                <div class="stat-label">PDF cleaner</div>
-                                <div class="stat-value">Teks rapi</div>
-                            </div>
-                        </div>
-                    </div>
                     <div class="col-md-4">
                         <div class="stat-card">
                             <div class="stat-icon"><i class="bi bi-stars"></i></div>
@@ -38,20 +29,25 @@
                     </div>
                     <div class="col-md-4">
                         <div class="stat-card">
-                            <div class="stat-icon"><i class="bi bi-calendar-check"></i></div>
+                            <div class="stat-icon"><i class="bi bi-postcard-heart"></i></div>
                             <div>
-                                <div class="stat-label">Study plan</div>
-                                <div class="stat-value">Jadwal realistis</div>
+                                <div class="stat-label">Learning set</div>
+                                <div class="stat-value">Flashcards & kuis</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stat-card">
+                            <div class="stat-icon"><i class="bi bi-clock-history"></i></div>
+                            <div>
+                                <div class="stat-label">Riwayat</div>
+                                <div class="stat-value">Bisa dibaca ulang</div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="mt-4 small text-muted">
-                    Sumber API aktif: <span class="fw-semibold text-slate">{{ ucfirst($apiKeySource) }}</span>
-                    <span class="mx-2">•</span>
-                    <a class="link-slate" href="{{ route('settings') }}">Atur API key</a>
-                </div>
+                <div class="mt-4 small text-muted">Riwayat hasil disimpan di browser ini dan bisa dibuka ulang kapan saja.</div>
             </div>
         </div>
     </div>
@@ -64,8 +60,8 @@
                     <div class="workflow-item">
                         <div class="workflow-step">1</div>
                         <div>
-                            <div class="fw-semibold">Unggah PDF kuliah</div>
-                            <div class="text-muted small">Ambil file PDF langsung dari laptop tanpa menyalin teks manual.</div>
+                            <div class="fw-semibold">Unggah materi kuliah</div>
+                            <div class="text-muted small">Ambil PDF atau teks topik dari laptop tanpa menyalin manual.</div>
                         </div>
                     </div>
                     <div class="workflow-item">
@@ -88,13 +84,28 @@
     </div>
 </div>
 
+<div id="history" class="card toolkit-card border-0 shadow-sm mb-4">
+    <div class="card-body p-4 p-lg-5">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+            <div>
+                <div class="section-kicker">History</div>
+                <h2 class="h3 fw-semibold mb-2">Riwayat hasil</h2>
+                <p class="text-muted mb-0">Buka ulang output terakhir tanpa menjalankan ulang proses dari awal.</p>
+            </div>
+            <button type="button" class="btn btn-outline-secondary" data-history-clear>Hapus riwayat</button>
+        </div>
+
+        <div id="history-output" class="history-panel mt-4" data-history-list></div>
+    </div>
+</div>
+
 <div id="text-tools" class="card toolkit-card border-0 shadow-sm mb-4">
     <div class="card-body p-4 p-lg-5">
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
             <div>
                 <div class="section-kicker">Text cleanup</div>
-                <h2 class="h3 fw-semibold mb-2">Pembersih teks PDF & pembuat rangkuman</h2>
-                        <p class="text-muted mb-0">Unggah file PDF, lalu sistem akan mengekstrak teks, merapikannya, dan membuat rangkuman detail otomatis.</p>
+                <h2 class="h3 fw-semibold mb-2">Pembuat rangkuman PDF</h2>
+                <p class="text-muted mb-0">Unggah file PDF, lalu sistem akan mengekstrak teks dan membuat rangkuman detail otomatis.</p>
             </div>
         </div>
 
@@ -108,16 +119,12 @@
                         <div id="pdf_file_help" class="form-hint mt-2">Pilih file PDF langsung. Kalau PDF hasil scan, teksnya mungkin perlu OCR dulu.</div>
                     </div>
                     <div class="d-flex flex-wrap gap-2">
-                        <button type="submit" class="btn btn-outline-secondary" name="mode" value="clean" data-submit-label="Bersihkan Format PDF">
-                            <span class="btn-label">Bersihkan Format PDF</span>
-                            <span class="btn-spinner spinner-border spinner-border-sm d-none" aria-hidden="true"></span>
-                        </button>
-                        <button type="submit" class="btn btn-primary-soft" name="mode" value="summary" data-submit-label="Buat Rangkuman">
+                        <button type="submit" class="btn btn-primary-soft" data-submit-label="Buat Rangkuman">
                             <span class="btn-label">Buat Rangkuman</span>
                             <span class="btn-spinner spinner-border spinner-border-sm d-none" aria-hidden="true"></span>
                         </button>
                     </div>
-                    <div class="form-hint mt-3">Tombol pertama merapikan teks PDF, tombol kedua menghasilkan ringkasan detail dari PDF tersebut.</div>
+                    <div class="form-hint mt-3">Hasil rangkuman akan tersimpan di riwayat sehingga bisa dibaca ulang kapan saja.</div>
                 </form>
             </div>
 

@@ -40,12 +40,12 @@
 
         <div class="header-search d-none d-md-flex" role="search">
             <i class="bi bi-search"></i>
-            <input type="search" class="form-control border-0" placeholder="Cari tools, rangkuman, atau setting" aria-label="Search tools">
+            <input type="search" class="form-control border-0" placeholder="Cari tools, riwayat, atau rangkuman" aria-label="Search tools">
         </div>
 
         <div class="d-flex align-items-center gap-2">
-            <a class="icon-button" href="{{ route('settings') }}" aria-label="Open settings">
-                <i class="bi bi-gear"></i>
+            <a class="icon-button" href="#history" aria-label="Open history">
+                <i class="bi bi-clock-history"></i>
             </a>
             <div class="profile-chip">
                 <span class="profile-dot"></span>
@@ -75,8 +75,8 @@
                 <a class="nav-link" href="#planner">
                     <i class="bi bi-calendar2-week me-2"></i>Study Planner
                 </a>
-                <a class="nav-link {{ request()->routeIs('settings') ? 'active' : '' }}" href="{{ route('settings') }}">
-                    <i class="bi bi-gear me-2"></i>Pengaturan API Key
+                <a class="nav-link" href="#history">
+                    <i class="bi bi-clock-history me-2"></i>Riwayat
                 </a>
             </nav>
         </div>
@@ -149,8 +149,8 @@
             <a class="nav-link" href="#planner" data-bs-dismiss="offcanvas">
                 <i class="bi bi-calendar2-week me-2"></i>Study Planner
             </a>
-            <a class="nav-link {{ request()->routeIs('settings') ? 'active' : '' }}" href="{{ route('settings') }}">
-                <i class="bi bi-gear me-2"></i>Pengaturan API Key
+            <a class="nav-link" href="#history" data-bs-dismiss="offcanvas">
+                <i class="bi bi-clock-history me-2"></i>Riwayat
             </a>
         </nav>
 
