@@ -22,7 +22,7 @@
 <body class="app-body">
 <a class="skip-link" href="#main-content">Skip to main content</a>
 
-<header class="app-header border-bottom">
+<header class="app-header">
     <div class="app-header-inner">
         <div class="d-flex align-items-center gap-3">
             <button class="icon-button d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileSidebar" aria-controls="mobileSidebar" aria-label="Open navigation">
@@ -30,9 +30,9 @@
             </button>
 
             <a class="brand-link" href="{{ route('dashboard') }}">
-                <div class="brand-mark">A</div>
+                <div class="brand-mark">S</div>
                 <div>
-                    <div class="brand-title">Academy</div>
+                    <div class="brand-title">StudiiAI</div>
                     <div class="brand-subtitle">Study companion</div>
                 </div>
             </a>
@@ -40,13 +40,16 @@
 
         <div class="header-search d-none d-md-flex" role="search">
             <i class="bi bi-search"></i>
-            <input type="search" class="form-control border-0" placeholder="Cari tools, riwayat, atau rangkuman" aria-label="Search tools">
+            <input type="search" class="form-control" placeholder="Cari tools, riwayat, atau rangkuman..." aria-label="Search tools">
         </div>
 
         <div class="d-flex align-items-center gap-2">
-            <a class="icon-button" href="#history" aria-label="Open history">
+            <a class="icon-button" href="#history" aria-label="Open history" title="Riwayat">
                 <i class="bi bi-clock-history"></i>
             </a>
+            <button type="button" class="icon-button" data-toggle-chat title="Tutor AI">
+                <i class="bi bi-chat-dots"></i>
+            </button>
             <div class="profile-chip">
                 <span class="profile-dot"></span>
                 <span class="d-none d-sm-inline">Mahasiswa</span>
@@ -56,9 +59,9 @@
 </header>
 
 <div class="app-shell">
-    <aside class="app-sidebar border-end d-none d-lg-flex">
+    <aside class="app-sidebar d-none d-lg-flex">
         <div class="sidebar-section">
-            <div class="sidebar-heading">Tools</div>
+            <div class="sidebar-heading">Menu utama</div>
             <nav class="nav flex-column gap-1 sidebar-nav">
                 <a class="nav-link {{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}">
                     <i class="bi bi-grid-1x2 me-2"></i>Dashboard
@@ -84,8 +87,8 @@
             </nav>
         </div>
 
-        <div class="sidebar-section sidebar-card">
-            <div class="sidebar-heading">Quick stats</div>
+        <div class="sidebar-card">
+            <div class="sidebar-heading">Fitur tersedia</div>
             <div class="sidebar-stat">
                 <span>AI summary</span>
                 <strong>Detail & terarah</strong>
@@ -130,10 +133,10 @@
 <div class="offcanvas offcanvas-start app-offcanvas" tabindex="-1" id="mobileSidebar" aria-labelledby="mobileSidebarLabel">
     <div class="offcanvas-header border-bottom">
         <div>
-            <div class="brand-title" id="mobileSidebarLabel">Academy</div>
+            <div class="brand-title" id="mobileSidebarLabel">StudiiAI</div>
             <div class="brand-subtitle">Study companion</div>
         </div>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
     <div class="offcanvas-body d-flex flex-column gap-4">
         <nav class="nav flex-column gap-1 sidebar-nav">
@@ -161,7 +164,7 @@
         </nav>
 
         <div class="sidebar-card">
-            <div class="sidebar-heading">Quick stats</div>
+            <div class="sidebar-heading">Fitur tersedia</div>
             <div class="sidebar-stat">
                 <span>AI summary</span>
                 <strong>Detail & terarah</strong>
