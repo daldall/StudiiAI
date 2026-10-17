@@ -207,6 +207,10 @@ function openHistoryEntry(entryId) {
 
 	renderResult(target, renderStoredToolResult(entry));
 	target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+	if (entry.tool === 'text-tools' && entry.data?.summary) {
+		updateChatStudyContext(entry.data.summary.title, entry.data.summary.plain_summary);
+	}
 }
 
 function deleteHistoryEntry(entryId) {
@@ -224,6 +228,181 @@ function pushHistory(tool, data, formData) {
 	entries.unshift(buildHistoryEntry(tool, data, formData));
 	saveHistoryEntries(entries);
 	renderHistoryPanel();
+}
+
+/* ---------- AI Tutor Chatbot ---------- */
+
+const CHAT_STORAGE_KEY = 'studiiai-chat-v1';
+let currentStudyContext = null;
+
+function formatChatMarkdown(text) {
+	if (!text) return '';
+	let html = escapeHtml(text);
+	html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+	html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+	html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+	html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+	html = html.replace(/(?:^|\n)[-*•]\s+(.+)/g, '<li>$1</li>');
+	html = html.replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>');
+	html = html.replace(/<\/ul>\s*<ul>/g, '');
+	html = html.replace(/\n{2,}/g, '</p><p>');
+	html = html.replace(/\n/g, '<br>');
+	return `<p>${html}</p>`;
+}
+
+function loadChatHistory() {
+	if (!canUseLocalStorage()) return [];
+	try {
+		const raw = localStorage.getItem(CHAT_STORAGE_KEY);
+		const parsed = JSON.parse(raw ?? '[]');
+		return Array.isArray(parsed) ? parsed : [];
+	} catch {
+		return [];
+	}
+}
+
+function saveChatHistory(history) {
+	if (!canUseLocalStorage()) return;
+	try {
+		localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(history.slice(-16)));
+	} catch {
+		// Ignore storage errors
+	}
+}
+
+function updateChatStudyContext(title, plainSummary) {
+	currentStudyContext = `Materi: ${title}\nRingkasan: ${plainSummary}`;
+	const badge = document.getElementById('chat-context-badge');
+	const label = badge?.querySelector('.chat-context-title');
+	if (badge && label) {
+		label.textContent = `Materi aktif: ${truncateText(title, 22)}`;
+		badge.classList.remove('d-none');
+	}
+}
+
+function removeChatStudyContext() {
+	currentStudyContext = null;
+	const badge = document.getElementById('chat-context-badge');
+	if (badge) {
+		badge.classList.add('d-none');
+	}
+}
+
+function appendChatBubble(role, content) {
+	const container = document.querySelector('[data-chat-messages]');
+	if (!container) return;
+
+	const isUser = role === 'user';
+	const bubble = document.createElement('div');
+	bubble.className = `chat-bubble ${isUser ? 'chat-bubble-user' : 'chat-bubble-bot'}`;
+
+	const inner = document.createElement('div');
+	inner.className = 'chat-bubble-content';
+	if (isUser) {
+		inner.textContent = content;
+	} else {
+		inner.innerHTML = formatChatMarkdown(content);
+	}
+
+	bubble.appendChild(inner);
+	container.appendChild(bubble);
+	container.scrollTop = container.scrollHeight;
+}
+
+function renderSavedChatMessages() {
+	const history = loadChatHistory();
+	if (!history.length) return;
+
+	history.forEach((msg) => {
+		appendChatBubble(msg.role, msg.content);
+	});
+}
+
+function openChatDrawer() {
+	const drawer = document.getElementById('ai-chat-drawer');
+	if (!drawer) return;
+	drawer.classList.remove('d-none');
+	drawer.setAttribute('aria-hidden', 'false');
+	const container = document.querySelector('[data-chat-messages]');
+	if (container) container.scrollTop = container.scrollHeight;
+	const input = document.querySelector('[data-chat-input]');
+	if (input) input.focus();
+}
+
+function closeChatDrawer() {
+	const drawer = document.getElementById('ai-chat-drawer');
+	if (!drawer) return;
+	drawer.classList.add('d-none');
+	drawer.setAttribute('aria-hidden', 'true');
+}
+
+function toggleChatDrawer() {
+	const drawer = document.getElementById('ai-chat-drawer');
+	if (!drawer) return;
+	if (drawer.classList.contains('d-none')) {
+		openChatDrawer();
+	} else {
+		closeChatDrawer();
+	}
+}
+
+async function handleChatSubmit(event) {
+	event.preventDefault();
+	const form = event.target;
+	const input = form.querySelector('[data-chat-input]');
+	const sendBtn = form.querySelector('[data-chat-send]');
+	const typing = document.querySelector('[data-chat-typing]');
+	const personaSelect = document.querySelector('[data-chat-persona]');
+	const persona = personaSelect?.value ?? 'tutor';
+
+	const message = input.value.trim();
+	if (!message) return;
+
+	input.value = '';
+	input.style.height = 'auto';
+
+	appendChatBubble('user', message);
+
+	const history = loadChatHistory();
+	const payloadHistory = history.slice(-6).map((h) => ({ role: h.role, content: h.content }));
+
+	if (typing) typing.classList.remove('d-none');
+	if (sendBtn) sendBtn.disabled = true;
+
+	try {
+		const response = await fetch(form.action, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-CSRF-TOKEN': csrfToken,
+				Accept: 'application/json',
+			},
+			body: JSON.stringify({
+				message,
+				history: payloadHistory,
+				persona,
+				context: currentStudyContext,
+			}),
+		});
+
+		const payload = await response.json();
+		if (!response.ok) {
+			throw new Error(payload?.message ?? 'Gagal menghubungi tutor AI.');
+		}
+
+		const reply = payload?.data?.reply ?? 'Maaf, belum bisa menjawab saat ini.';
+		appendChatBubble('model', reply);
+
+		history.push({ role: 'user', content: message });
+		history.push({ role: 'model', content: reply });
+		saveChatHistory(history);
+	} catch (error) {
+		appendChatBubble('model', `⚠️ ${error.message || 'Terjadi gangguan saat memproses jawaban.'}`);
+	} finally {
+		if (typing) typing.classList.add('d-none');
+		if (sendBtn) sendBtn.disabled = false;
+		input.focus();
+	}
 }
 
 /* ---------- Renderer hasil ---------- */
@@ -540,6 +719,10 @@ async function submitAiForm(form, submitter) {
 		if (renderers[tool]) {
 			renderResult(target, renderers[tool](data));
 			pushHistory(tool, data, formData);
+
+			if (tool === 'text-tools' && data.summary) {
+				updateChatStudyContext(data.summary.title ?? 'Materi PDF', data.summary.plain_summary ?? '');
+			}
 		}
 	} catch (error) {
 		renderResult(target, `
@@ -555,6 +738,12 @@ async function submitAiForm(form, submitter) {
 }
 
 document.addEventListener('submit', (event) => {
+	const chatForm = event.target.closest('[data-chat-form]');
+	if (chatForm) {
+		handleChatSubmit(event);
+		return;
+	}
+
 	const form = event.target.matches?.('[data-ai-form]')
 		? event.target
 		: event.target.closest?.('form[data-ai-form]');
@@ -568,6 +757,53 @@ document.addEventListener('submit', (event) => {
 });
 
 document.addEventListener('click', async (event) => {
+	if (event.target.closest('[data-toggle-chat]')) {
+		toggleChatDrawer();
+		return;
+	}
+
+	if (event.target.closest('[data-chat-close]')) {
+		closeChatDrawer();
+		return;
+	}
+
+	if (event.target.closest('[data-open-chat]')) {
+		openChatDrawer();
+		return;
+	}
+
+	if (event.target.closest('[data-chat-clear]')) {
+		if (confirm('Hapus riwayat chat dengan Tutor AI?')) {
+			saveChatHistory([]);
+			const container = document.querySelector('[data-chat-messages]');
+			if (container) {
+				container.innerHTML = `
+					<div class="chat-bubble chat-bubble-bot">
+						<div class="chat-bubble-content">
+							Riwayat chat telah dibersihkan. Ada materi atau tugas kuliah lain yang ingin kamu diskusikan?
+						</div>
+					</div>
+				`;
+			}
+		}
+		return;
+	}
+
+	if (event.target.closest('[data-chat-remove-context]')) {
+		removeChatStudyContext();
+		return;
+	}
+
+	const promptChip = event.target.closest('[data-chat-suggest]');
+	if (promptChip) {
+		const input = document.querySelector('[data-chat-input]');
+		if (input) {
+			input.value = promptChip.dataset.chatSuggest ?? '';
+			input.focus();
+		}
+		return;
+	}
+
 	const historyOpen = event.target.closest('[data-history-open]');
 
 	if (historyOpen) {
@@ -654,8 +890,32 @@ document.addEventListener('click', async (event) => {
 	}
 });
 
-if (document.readyState === 'loading') {
-	document.addEventListener('DOMContentLoaded', renderHistoryPanel);
-} else {
+document.addEventListener('input', (event) => {
+	const input = event.target.closest('[data-chat-input]');
+	if (input) {
+		input.style.height = 'auto';
+		input.style.height = `${Math.min(input.scrollHeight, 120)}px`;
+	}
+});
+
+document.addEventListener('keydown', (event) => {
+	if (event.key === 'Enter' && !event.shiftKey) {
+		const input = event.target.closest('[data-chat-input]');
+		if (input) {
+			event.preventDefault();
+			const form = input.closest('form');
+			if (form) form.requestSubmit();
+		}
+	}
+});
+
+function initApp() {
 	renderHistoryPanel();
+	renderSavedChatMessages();
+}
+
+if (document.readyState === 'loading') {
+	document.addEventListener('DOMContentLoaded', initApp);
+} else {
+	initApp();
 }

@@ -92,5 +92,45 @@ class AcademicToolkitTest extends TestCase
             ],
         ]);
     }
+
+    public function test_chat_endpoint_responds_successfully(): void
+    {
+        $response = $this->postJson('/ai/chat', [
+            'message' => 'Halo tutor, jelaskan apa itu algoritma greedy dengan analogi!',
+            'persona' => 'tutor',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure([
+            'message',
+            'data' => [
+                'reply',
+                'persona',
+            ],
+        ]);
+        $this->assertNotEmpty($response->json('data.reply'));
+    }
+
+    public function test_chat_endpoint_with_history_and_context(): void
+    {
+        $response = $this->postJson('/ai/chat', [
+            'message' => 'Lalu bagaimana contoh kasus sederhananya?',
+            'history' => [
+                ['role' => 'user', 'content' => 'Apa itu dynamic programming?'],
+                ['role' => 'model', 'content' => 'Dynamic programming adalah metode pemecahan masalah dengan memecahnya menjadi submasalah.'],
+            ],
+            'persona' => 'socratic',
+            'context' => 'Materi Bab 4: Dynamic Programming dan Memoization.',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'message' => 'Jawaban berhasil dibuat.',
+            'data' => [
+                'persona' => 'socratic',
+            ],
+        ]);
+        $this->assertNotEmpty($response->json('data.reply'));
+    }
 }
 

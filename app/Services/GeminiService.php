@@ -322,6 +322,165 @@ PROMPT;
     }
 
     // ---------------------------------------------------------------------
+    // AI Chat Bot (Tutor / Study Buddy)
+    // ---------------------------------------------------------------------
+
+    public function chat(array $messages, string $persona = 'tutor', ?string $context = null, ?string $apiKey = null): string
+    {
+        $lastMessage = end($messages);
+        $userText = is_array($lastMessage) ? ($lastMessage['content'] ?? '') : (string) $lastMessage;
+
+        if (!$apiKey) {
+            return $this->fallbackChatResponse($userText, $persona);
+        }
+
+        $systemInstruction = $this->buildChatSystemInstruction($persona, $context);
+        $contents = $this->formatChatContents($messages);
+
+        if (empty($contents)) {
+            return $this->fallbackChatResponse($userText, $persona);
+        }
+
+        $configuredModel = (string) (config('services.gemini.chat_model') ?: 'gemini-3.5-flash-lite');
+        $candidateModels = array_values(array_unique(array_filter([
+            $configuredModel,
+            'gemini-3.5-flash-lite',
+            'gemini-3.8-flash',
+        ])));
+
+        $payload = [
+            'systemInstruction' => [
+                'parts' => [['text' => $systemInstruction]],
+            ],
+            'contents' => $contents,
+            'generationConfig' => [
+                'temperature' => $persona === 'dosen' ? 0.3 : 0.6,
+                'topP' => 0.9,
+                'maxOutputTokens' => 1024,
+            ],
+        ];
+
+        foreach ($candidateModels as $model) {
+            try {
+                $response = Http::timeout(25)
+                    ->acceptJson()
+                    ->asJson()
+                    ->withHeaders(['x-goog-api-key' => $apiKey])
+                    ->post("https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent", $payload);
+
+                if ($response->successful()) {
+                    $text = $this->extractResponseText($response->json());
+                    if (trim($text) !== '') {
+                        return trim($text);
+                    }
+                } else {
+                    Log::warning('Gemini chat request gagal', [
+                        'model' => $model,
+                        'status' => $response->status(),
+                        'body' => Str::limit($response->body(), 300),
+                    ]);
+
+                    if ($response->status() === 404) {
+                        continue;
+                    }
+                }
+            } catch (Throwable $e) {
+                Log::warning('Gemini chat exception: ' . $e->getMessage(), [
+                    'model' => $model,
+                ]);
+            }
+        }
+
+        return $this->fallbackChatResponse($userText, $persona);
+    }
+
+    private function buildChatSystemInstruction(string $persona, ?string $context): string
+    {
+        $base = match ($persona) {
+            'socratic' => <<<TXT
+Kamu adalah Tutor Akademik Sokratik yang efektif dan to-the-point untuk mahasiswa/siswa.
+Prinsip utama:
+1. JAWAB CEPAT & PADAT: langsung masuk ke esensi tanpa basa-basi pembuka atau mengulang pertanyaan.
+2. JANGAN langsung memberikan jawaban akhir jika berupa tugas/soal hitungan.
+3. Berikan bimbingan bertahap: 1 konfirmasi singkat, 1 petunjuk (hint) kunci, atau 1 pertanyaan pemandu logis agar pengguna segera menemukan jawabannya sendiri.
+4. Gunakan bahasa Indonesia yang ramah dan memotivasi.
+TXT,
+            'dosen' => <<<TXT
+Kamu adalah Dosen Pembimbing Akademik yang profesional, lugas, dan efisien untuk mahasiswa Indonesia.
+Prinsip utama:
+1. JAWAB CEPAT & LUGAS: langsung masuk ke telaah akademik tanpa basa-basi pembuka.
+2. Berikan masukan langsung pada poin kritis: kekuatan argumen, kelemahan/celah metodologi atau logika, dan rekomendasi perbaikan konkret.
+3. Berikan arahan yang terukur dan aplikatif untuk skripsi, jurnal, atau makalah ilmiah.
+TXT,
+            default => <<<TXT
+Kamu adalah "Kakak Tingkat" & Study Buddy yang ramah, santai, cerdas, dan to-the-point untuk mahasiswa/siswa Indonesia.
+Prinsip utama:
+1. JAWAB CEPAT & LANGSUNG KE INTI: hindari basa-basi panjang, salam berulang, atau pengantar klise. Langsung masuk ke jawaban yang dicari.
+2. JELAS & PADAT: jelaskan konsep penting dengan analogi ringkas atau contoh kasus/kodingan singkat bila relevan.
+3. FORMAT RAPI: gunakan formatting terstruktur (bullet points, bold pada istilah penting) agar cepat dipindai dan dipahami mahasiswa.
+4. Tetap ramah, santai, dan menyemangati, namun utamakan efisiensi waktu belajar.
+TXT,
+        };
+
+        if ($context && trim($context) !== '') {
+            $cleanedContext = Str::limit(trim($context), 6000);
+            $base .= "\n\nKonteks materi yang sedang dipelajari pengguna saat ini:\n\"\"\"\n{$cleanedContext}\n\"\"\"\nJika relevan dengan pertanyaan pengguna, gunakan dan rujuk konteks materi di atas.";
+        }
+
+        return $base;
+    }
+
+    private function formatChatContents(array $messages): array
+    {
+        $formatted = [];
+
+        foreach ($messages as $msg) {
+            if (!is_array($msg)) {
+                continue;
+            }
+
+            $rawRole = $msg['role'] ?? 'user';
+            $role = ($rawRole === 'model' || $rawRole === 'assistant') ? 'model' : 'user';
+            $content = trim((string) ($msg['content'] ?? ''));
+
+            if ($content === '') {
+                continue;
+            }
+
+            if (empty($formatted) && $role !== 'user') {
+                continue;
+            }
+
+            $lastIndex = count($formatted) - 1;
+            if ($lastIndex >= 0 && $formatted[$lastIndex]['role'] === $role) {
+                $formatted[$lastIndex]['parts'][0]['text'] .= "\n\n" . $content;
+            } else {
+                $formatted[] = [
+                    'role' => $role,
+                    'parts' => [
+                        ['text' => $content],
+                    ],
+                ];
+            }
+        }
+
+        return array_slice($formatted, -8);
+    }
+
+    private function fallbackChatResponse(string $userText, string $persona): string
+    {
+        if ($persona === 'socratic') {
+            return "Pertanyaan yang menarik! Untuk memahami hal ini langkah demi langkah, coba kita urai dulu:\n\n1. Menurut pemahamanmu saat ini, apa komponen utama dari topik ini?\n2. Di bagian mana yang terasa paling membingungkan: konsep dasarnya, rumusnya, atau penerapannya?\n\nCoba jawab dulu dari sudut pandangmu, nanti kita diskusikan bersama sampai tuntas!";
+        }
+
+        if ($persona === 'dosen') {
+            return "Topik bahasan yang diajukan memiliki relevansi akademik yang baik. Untuk memperdalam telaah tersebut, saya sarankan perhatikan tiga aspek penting:\n\n1. **Landasan Teori**: Pastikan definisi dan batasan konsep merujuk pada literatur ilmiah yang sahih.\n2. **Keterkaitan Logis**: Amati bagaimana konsep ini berhubungan dengan kasus empiris atau permasalahan nyata.\n3. **Metodologi Analisis**: Uji apakah argumen Anda sudah bebas dari bias atau asumsi yang belum terbukti.\n\nSilakan elaborasi poin spesifik yang ingin Anda diskusikan lebih lanjut.";
+        }
+
+        return "Halo! Pertanyaan bagus banget. Intinya, konsep ini bisa dibayangkan seperti sistem kerja sehari-hari: ada input yang masuk, aturan proses yang menentukan arahnya, dan hasil akhir yang diharapkan.\n\nBiar makin gampang dipahami, kamu mau kita bahas dari **analogi sederhananya**, **contoh kasus nyatanya**, atau **langkah-langkah praktisnya** dulu?";
+    }
+
+    // ---------------------------------------------------------------------
     // Gemini transport
     // ---------------------------------------------------------------------
 
@@ -330,10 +489,13 @@ PROMPT;
         // Dua percobaan HTTP + pemrosesan bisa melebihi batas default 30 detik.
         @set_time_limit(240);
 
-        $model = (string) (config('services.gemini.model') ?: 'gemini-2.5-flash');
-
-        // thinkingConfig hanya dikirim untuk keluarga 2.5 agar model lain tidak menolak request.
-        $supportsThinking = str_contains($model, 'gemini-2.5');
+        $configuredModel = (string) (config('services.gemini.model') ?: 'gemini-3.8-flash');
+        $candidateModels = array_values(array_unique(array_filter([
+            $configuredModel,
+            'gemini-3.8-flash',
+            'gemini-2.0-flash',
+            'gemini-1.5-flash',
+        ])));
 
         // Percobaan 2 hanya dipakai bila jawaban terpotong/JSON tidak valid:
         // batas token lebih besar dan thinking dikurangi agar token tersisa untuk jawaban.
@@ -342,84 +504,97 @@ PROMPT;
             ['maxOutputTokens' => 32768, 'thinkingBudget' => 512],
         ];
 
-        foreach ($attempts as $attempt) {
-            $generationConfig = [
-                'temperature' => $temperature,
-                'topP' => 0.9,
-                'maxOutputTokens' => $attempt['maxOutputTokens'],
-                'responseMimeType' => 'application/json',
-            ];
+        foreach ($candidateModels as $model) {
+            $supportsThinking = str_contains($model, 'gemini-2.5');
 
-            if ($supportsThinking) {
-                $generationConfig['thinkingConfig'] = ['thinkingBudget' => $attempt['thinkingBudget']];
-            }
+            foreach ($attempts as $attempt) {
+                $generationConfig = [
+                    'temperature' => $temperature,
+                    'topP' => 0.9,
+                    'maxOutputTokens' => $attempt['maxOutputTokens'],
+                    'responseMimeType' => 'application/json',
+                ];
 
-            if ($schema !== null) {
-                $generationConfig['responseSchema'] = $schema;
-            }
+                if ($supportsThinking) {
+                    $generationConfig['thinkingConfig'] = ['thinkingBudget' => $attempt['thinkingBudget']];
+                }
 
-            $payload = [
-                'systemInstruction' => [
-                    'parts' => [['text' => self::SYSTEM_PERSONA]],
-                ],
-                'contents' => [
-                    [
-                        'role' => 'user',
-                        'parts' => [['text' => $prompt]],
+                if ($schema !== null) {
+                    $generationConfig['responseSchema'] = $schema;
+                }
+
+                $payload = [
+                    'systemInstruction' => [
+                        'parts' => [['text' => self::SYSTEM_PERSONA]],
                     ],
-                ],
-                'generationConfig' => $generationConfig,
-            ];
+                    'contents' => [
+                        [
+                            'role' => 'user',
+                            'parts' => [['text' => $prompt]],
+                        ],
+                    ],
+                    'generationConfig' => $generationConfig,
+                ];
 
-            try {
-                $response = Http::timeout(75)
-                    ->retry(2, 800, function ($exception) {
-                        if ($exception instanceof ConnectionException) {
-                            return true;
+                try {
+                    $response = Http::timeout(75)
+                        ->retry(2, 800, function ($exception) {
+                            if ($exception instanceof ConnectionException) {
+                                return true;
+                            }
+
+                            if ($exception instanceof RequestException) {
+                                return in_array($exception->response->status(), [429, 500, 502, 503, 504], true);
+                            }
+
+                            return false;
+                        }, throw: false)
+                        ->acceptJson()
+                        ->asJson()
+                        ->withHeaders(['x-goog-api-key' => $apiKey])
+                        ->post("https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent", $payload);
+
+                    if (!$response->successful()) {
+                        Log::warning('Gemini request gagal', [
+                            'model' => $model,
+                            'status' => $response->status(),
+                            'body' => Str::limit($response->body(), 300),
+                        ]);
+
+                        if ($response->status() === 404) {
+                            // Model deprecated atau tidak tersedia, coba model berikutnya
+                            break;
                         }
 
-                        if ($exception instanceof RequestException) {
-                            return in_array($exception->response->status(), [429, 500, 502, 503, 504], true);
-                        }
+                        return null;
+                    }
 
-                        return false;
-                    }, throw: false)
-                    ->acceptJson()
-                    ->asJson()
-                    ->withHeaders(['x-goog-api-key' => $apiKey])
-                    ->post("https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent", $payload);
+                    $json = $response->json();
+                    $finishReason = (string) data_get($json, 'candidates.0.finishReason', '');
+                    $text = $this->extractResponseText($json);
+                    $decoded = $text !== '' ? $this->decodeJsonResponse($text) : null;
 
-                if (!$response->successful()) {
-                    Log::warning('Gemini request gagal', [
-                        'status' => $response->status(),
-                        'body' => Str::limit($response->body(), 300),
+                    if ($decoded !== null) {
+                        return $decoded;
+                    }
+
+                    Log::warning('Gemini mengembalikan JSON tidak valid atau kosong', [
+                        'model' => $model,
+                        'finishReason' => $finishReason,
+                        'attempt_max_tokens' => $attempt['maxOutputTokens'],
                     ]);
 
-                    return null;
+                    // Diblokir oleh filter: mengulang tidak akan membantu.
+                    if (in_array($finishReason, ['SAFETY', 'RECITATION', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII'], true)) {
+                        return null;
+                    }
+                } catch (Throwable $e) {
+                    Log::warning('Gemini exception: ' . $e->getMessage(), [
+                        'model' => $model,
+                    ]);
+
+                    break;
                 }
-
-                $json = $response->json();
-                $finishReason = (string) data_get($json, 'candidates.0.finishReason', '');
-                $text = $this->extractResponseText($json);
-                $decoded = $text !== '' ? $this->decodeJsonResponse($text) : null;
-
-                if ($decoded !== null) {
-                    return $decoded;
-                }
-
-                Log::warning('Gemini mengembalikan JSON tidak valid atau kosong', [
-                    'finishReason' => $finishReason,
-                    'attempt_max_tokens' => $attempt['maxOutputTokens'],
-                ]);
-
-                // Diblokir oleh filter: mengulang tidak akan membantu.
-                if (in_array($finishReason, ['SAFETY', 'RECITATION', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII'], true)) {
-                    return null;
-                }
-            } catch (Throwable $e) {
-                Log::warning('Gemini exception: ' . $e->getMessage());
-
-                return null;
             }
         }
 

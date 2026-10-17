@@ -117,11 +117,55 @@ class AcademicToolkitController extends Controller
         ]);
     }
 
+    public function chat(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'message' => ['required', 'string', 'max:2000'],
+            'history' => ['nullable', 'array', 'max:20'],
+            'history.*.role' => ['required_with:history', 'in:user,model,assistant'],
+            'history.*.content' => ['required_with:history', 'string', 'max:4000'],
+            'persona' => ['nullable', 'in:tutor,socratic,dosen'],
+            'context' => ['nullable', 'string', 'max:20000'],
+        ]);
+
+        $history = (array) ($validated['history'] ?? []);
+        $history[] = [
+            'role' => 'user',
+            'content' => $validated['message'],
+        ];
+
+        $reply = $this->gemini->chat(
+            $history,
+            $validated['persona'] ?? 'tutor',
+            $validated['context'] ?? null,
+            $this->chatApiKey()
+        );
+
+        return response()->json([
+            'message' => 'Jawaban berhasil dibuat.',
+            'data' => [
+                'reply' => $reply,
+                'persona' => $validated['persona'] ?? 'tutor',
+            ],
+        ]);
+    }
+
     private function apiKey(): ?string
     {
         $configKey = trim((string) config('services.gemini.api_key', ''));
 
         return $configKey !== '' ? $configKey : null;
+    }
+
+    private function chatApiKey(): ?string
+    {
+        $chatKey = trim((string) config('services.gemini.chat_api_key', ''));
+
+        if ($chatKey !== '') {
+            return $chatKey;
+        }
+
+        return $this->apiKey();
     }
 
     private function hasApiKey(): bool

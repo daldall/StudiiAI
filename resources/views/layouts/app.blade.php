@@ -78,6 +78,9 @@
                 <a class="nav-link" href="#history">
                     <i class="bi bi-clock-history me-2"></i>Riwayat
                 </a>
+                <a class="nav-link" href="#ai-chat-drawer" data-open-chat>
+                    <i class="bi bi-chat-dots me-2"></i>Tutor AI
+                </a>
             </nav>
         </div>
 
@@ -152,6 +155,9 @@
             <a class="nav-link" href="#history" data-bs-dismiss="offcanvas">
                 <i class="bi bi-clock-history me-2"></i>Riwayat
             </a>
+            <a class="nav-link" href="#ai-chat-drawer" data-bs-dismiss="offcanvas" data-open-chat>
+                <i class="bi bi-chat-dots me-2"></i>Tutor AI
+            </a>
         </nav>
 
         <div class="sidebar-card">
@@ -169,6 +175,98 @@
                 <strong>Harian realistis</strong>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- Floating AI Tutor Chatbot -->
+<div id="ai-chat-widget" class="ai-chat-widget">
+    <!-- Floating Launcher Button -->
+    <button type="button" class="chat-launcher-btn shadow" data-toggle-chat aria-label="Buka Chat Tutor AI">
+        <i class="bi bi-chat-dots-fill"></i>
+        <span class="chat-launcher-text">Tutor AI</span>
+        <span class="chat-launcher-dot"></span>
+    </button>
+
+    <!-- Floating Chat Window / Drawer -->
+    <div id="ai-chat-drawer" class="chat-drawer shadow-lg d-none" aria-hidden="true">
+        <!-- Header -->
+        <div class="chat-drawer-header">
+            <div class="d-flex align-items-center gap-2">
+                <div class="chat-avatar">
+                    <i class="bi bi-robot"></i>
+                </div>
+                <div>
+                    <div class="chat-title">Tutor AI (Study Buddy)</div>
+                    <div class="chat-subtitle"><span class="chat-online-dot"></span> Siap membantumu belajar</div>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-1">
+                <button type="button" class="btn btn-sm btn-icon text-muted" data-chat-clear title="Hapus riwayat chat">
+                    <i class="bi bi-trash3"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-icon text-muted" data-chat-close title="Tutup">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Persona & Context Bar -->
+        <div class="chat-toolbar">
+            <div class="d-flex align-items-center justify-content-between gap-2">
+                <div class="d-flex align-items-center gap-1 w-100">
+                    <span class="chat-toolbar-label">Gaya:</span>
+                    <select class="form-select form-select-sm chat-persona-select" data-chat-persona>
+                        <option value="tutor" selected>Kakak Tingkat (Ramah & Santai)</option>
+                        <option value="socratic">Tutor Sokratik (Pemandu Bertahap)</option>
+                        <option value="dosen">Dosen Pembimbing (Kritis & Formal)</option>
+                    </select>
+                </div>
+            </div>
+            <div id="chat-context-badge" class="chat-context-badge d-none mt-2">
+                <div class="d-flex align-items-center justify-content-between">
+                    <span class="text-truncate small"><i class="bi bi-paperclip me-1"></i><span class="chat-context-title">Materi aktif</span></span>
+                    <button type="button" class="btn-close-context" data-chat-remove-context title="Lepas konteks">&times;</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Messages Container -->
+        <div class="chat-messages" data-chat-messages>
+            <!-- Default Welcome Message -->
+            <div class="chat-bubble chat-bubble-bot">
+                <div class="chat-bubble-content">
+                    Halo! Aku <strong>Tutor AI</strong> siap nemenin kamu belajar atau ngerjain tugas. Mau diskusi materi apa hari ini?
+                </div>
+                <div class="chat-prompt-suggestions mt-2">
+                    <button type="button" class="chat-prompt-chip" data-chat-suggest="Jelaskan materi sulit ini dengan analogi kehidupan sehari-hari yang gampang dibayangin: ">
+                        💡 Jelaskan dengan analogi
+                    </button>
+                    <button type="button" class="chat-prompt-chip" data-chat-suggest="Bantu saya membuat kerangka (outline) tugas/makalah tentang: ">
+                        📝 Buat kerangka tugas
+                    </button>
+                    <button type="button" class="chat-prompt-chip" data-chat-suggest="Coba berikan saya 3 pertanyaan latihan untuk menguji pemahaman saya tentang: ">
+                        ❓ Uji pemahaman materi
+                    </button>
+                    <button type="button" class="chat-prompt-chip" data-chat-suggest="Beri contoh studi kasus nyata dalam perkuliahan atau industri untuk topik: ">
+                        🎯 Contoh kasus nyata
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Typing Indicator -->
+        <div class="chat-typing d-none" data-chat-typing>
+            <span></span><span></span><span></span>
+            <small class="text-muted ms-2">Tutor sedang berpikir...</small>
+        </div>
+
+        <!-- Input Box -->
+        <form class="chat-input-form" data-chat-form action="{{ route('ai.chat') }}">
+            <textarea class="form-control chat-input" data-chat-input rows="1" placeholder="Tanyakan apa saja seputar pelajaranmu..." required></textarea>
+            <button type="submit" class="btn btn-primary-soft chat-send-btn" data-chat-send aria-label="Kirim pesan">
+                <i class="bi bi-send-fill"></i>
+            </button>
+        </form>
     </div>
 </div>
 

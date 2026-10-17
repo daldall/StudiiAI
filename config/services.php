@@ -30,6 +30,9 @@ return [
 
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-3.8-flash'),
+        'chat_api_key' => env('GEMINI_CHAT_API_KEY', env('GEMINI_API_KEY')),
+        'chat_model' => env('GEMINI_CHAT_MODEL', 'gemini-3.5-flash-lite'),
     ],
 
     'slack' => [

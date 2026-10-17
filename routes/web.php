@@ -9,3 +9,5 @@ Route::post('/ai/text-tools', [AcademicToolkitController::class, 'textTools'])->
 Route::post('/ai/flashcards', [AcademicToolkitController::class, 'flashcards'])->name('ai.flashcards');
 Route::post('/ai/citation', [AcademicToolkitController::class, 'citation'])->name('ai.citation');
 Route::post('/ai/study-plan', [AcademicToolkitController::class, 'studyPlan'])->name('ai.study-plan');
+Route::post('/ai/chat', [AcademicToolkitController::class, 'chat'])->name('ai.chat');
+
