@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ $title ?? config('app.name', 'StudiiAI') }}</title>
+    <title>{{ $title ?? 'StudiiAI — Autonomous Academic Study Companion' }}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -22,176 +22,120 @@
 <body class="app-body">
 <a class="skip-link" href="#main-content">Skip to main content</a>
 
-<header class="app-header">
-    <div class="app-header-inner">
-        <div class="d-flex align-items-center gap-3">
-            <button class="icon-button d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileSidebar" aria-controls="mobileSidebar" aria-label="Open navigation">
-                <i class="bi bi-list"></i>
-            </button>
-
-            <a class="brand-link" href="{{ route('dashboard') }}">
-                <div class="brand-mark">S</div>
-                <div>
-                    <div class="brand-title">StudiiAI</div>
-                    <div class="brand-subtitle">Study companion</div>
-                </div>
-            </a>
-        </div>
-
-        <div class="header-search d-none d-md-flex" role="search">
-            <i class="bi bi-search"></i>
-            <input type="search" class="form-control" placeholder="Cari tools, riwayat, atau rangkuman..." aria-label="Search tools">
-        </div>
-
-        <div class="d-flex align-items-center gap-2">
-            <a class="icon-button" href="#history" aria-label="Open history" title="Riwayat">
-                <i class="bi bi-clock-history"></i>
-            </a>
-            <button type="button" class="icon-button" data-toggle-chat title="Tutor AI">
-                <i class="bi bi-chat-dots"></i>
-            </button>
-            <div class="profile-chip">
-                <span class="profile-dot"></span>
-                <span class="d-none d-sm-inline">Mahasiswa</span>
+{{-- ========================= PARLO TOPBAR ========================= --}}
+<header class="app-topbar">
+    <div class="topbar-container">
+        {{-- Brand / Logo --}}
+        <a class="topbar-brand" href="{{ route('dashboard') }}">
+            <div class="brand-icon-parlo">
+                <i class="bi bi-slash-lg" style="transform: rotate(45deg); font-size: 0.9rem;"></i>
             </div>
+            <span class="brand-name">StudiiAI</span>
+        </a>
+
+        {{-- Center Navigation Links --}}
+        <nav class="d-none d-lg-flex">
+            <ul class="topbar-nav">
+                <li><a class="topbar-link" href="#text-tools">PDF Rangkuman</a></li>
+                <li><a class="topbar-link" href="#flashcards">Flashcards & Kuis</a></li>
+                <li><a class="topbar-link" href="#citation">Sitasi</a></li>
+                <li><a class="topbar-link" href="#planner">Study Planner</a></li>
+                <li><a class="topbar-link" href="#history">Riwayat</a></li>
+            </ul>
+        </nav>
+
+        {{-- Right Side Actions --}}
+        <div class="topbar-actions">
+            <button type="button" class="btn-parlo-dark d-none d-sm-inline-flex" data-open-chat title="Buka Tutor AI">
+                <span class="status-dot-emerald me-1"></span>
+                Tutor AI
+            </button>
+            <a href="#text-tools" class="btn-parlo-white">
+                Mulai Belajar <i class="bi bi-arrow-right ms-1"></i>
+            </a>
+            <button class="btn-icon-topbar d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileNav" aria-controls="mobileNav" aria-label="Toggle navigation">
+                <i class="bi bi-list fs-5"></i>
+            </button>
         </div>
     </div>
 </header>
 
-<div class="app-shell">
-    <aside class="app-sidebar d-none d-lg-flex">
-        <div class="sidebar-section">
-            <div class="sidebar-heading">Menu utama</div>
-            <nav class="nav flex-column gap-1 sidebar-nav">
-                <a class="nav-link {{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}">
-                    <i class="bi bi-grid-1x2 me-2"></i>Dashboard
-                </a>
-                <a class="nav-link" href="#text-tools">
-                    <i class="bi bi-file-earmark-arrow-up me-2"></i>PDF Rangkuman
-                </a>
-                <a class="nav-link" href="#flashcards">
-                    <i class="bi bi-stack me-2"></i>Flashcards & Kuis
-                </a>
-                <a class="nav-link" href="#citation">
-                    <i class="bi bi-journal-text me-2"></i>Sitasi
-                </a>
-                <a class="nav-link" href="#planner">
-                    <i class="bi bi-calendar2-week me-2"></i>Study Planner
-                </a>
-                <a class="nav-link" href="#history">
-                    <i class="bi bi-clock-history me-2"></i>Riwayat
-                </a>
-                <a class="nav-link" href="#ai-chat-drawer" data-open-chat>
-                    <i class="bi bi-chat-dots me-2"></i>Tutor AI
-                </a>
-            </nav>
-        </div>
-
-        <div class="sidebar-card">
-            <div class="sidebar-heading">Fitur tersedia</div>
-            <div class="sidebar-stat">
-                <span>AI summary</span>
-                <strong>Detail & terarah</strong>
-            </div>
-            <div class="sidebar-stat">
-                <span>Flashcards</span>
-                <strong>Interaktif</strong>
-            </div>
-            <div class="sidebar-stat">
-                <span>Study plan</span>
-                <strong>Harian realistis</strong>
+{{-- ========================= MAIN PAGE CONTENT ========================= --}}
+<main id="main-content">
+    @if (session('status'))
+        <div class="topbar-container pt-3">
+            <div class="alert alert-success border-0 mb-0 py-2 px-3 small" role="alert" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25) !important; color: #34d399; border-radius: 999px;">
+                <i class="bi bi-check2-circle me-1"></i>{{ session('status') }}
             </div>
         </div>
-    </aside>
+    @endif
 
-    <main class="app-content" id="main-content">
-        <div class="page-shell">
-            <div class="container-fluid page-container">
-            @if (session('status'))
-                <div class="alert alert-success border-0 shadow-sm mb-4" role="alert">
-                    <i class="bi bi-check2-circle me-1"></i>{{ session('status') }}
-                </div>
-            @endif
-
-            @if ($errors->any())
-                <div class="alert alert-danger border-0 shadow-sm mb-4" role="alert">
-                    <div class="fw-semibold mb-1">Ada input yang perlu diperbaiki.</div>
-                    <ul class="mb-0 ps-3">
-                        @foreach ($errors->all() as $error)
-                            <li>{{ $error }}</li>
-                        @endforeach
-                    </ul>
-                </div>
-            @endif
-
-            @yield('content')
+    @if ($errors->any())
+        <div class="topbar-container pt-3">
+            <div class="alert alert-danger border-0 mb-0 py-2 px-3 small" role="alert" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25) !important; color: #f87171; border-radius: 12px;">
+                <div class="fw-semibold mb-1">Ada input yang perlu diperbaiki:</div>
+                <ul class="mb-0 ps-3">
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
             </div>
         </div>
-    </main>
-</div>
+    @endif
 
-<div class="offcanvas offcanvas-start app-offcanvas" tabindex="-1" id="mobileSidebar" aria-labelledby="mobileSidebarLabel">
-    <div class="offcanvas-header border-bottom">
-        <div>
-            <div class="brand-title" id="mobileSidebarLabel">StudiiAI</div>
-            <div class="brand-subtitle">Study companion</div>
+    @yield('content')
+</main>
+
+{{-- ========================= MOBILE OFFCANVAS ========================= --}}
+<div class="offcanvas offcanvas-start parlo-offcanvas" tabindex="-1" id="mobileNav" aria-labelledby="mobileNavLabel">
+    <div class="offcanvas-header p-3">
+        <div class="d-flex align-items-center gap-2" id="mobileNavLabel">
+            <div class="brand-icon-parlo">
+                <i class="bi bi-slash-lg" style="transform: rotate(45deg); font-size: 0.9rem;"></i>
+            </div>
+            <span class="brand-name">StudiiAI</span>
         </div>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
-    <div class="offcanvas-body d-flex flex-column gap-4">
-        <nav class="nav flex-column gap-1 sidebar-nav">
-            <a class="nav-link {{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}">
-                <i class="bi bi-grid-1x2 me-2"></i>Dashboard
-            </a>
-            <a class="nav-link" href="#text-tools" data-bs-dismiss="offcanvas">
-                <i class="bi bi-file-earmark-arrow-up me-2"></i>PDF Rangkuman
-            </a>
-            <a class="nav-link" href="#flashcards" data-bs-dismiss="offcanvas">
-                <i class="bi bi-stack me-2"></i>Flashcards & Kuis
-            </a>
-            <a class="nav-link" href="#citation" data-bs-dismiss="offcanvas">
-                <i class="bi bi-journal-text me-2"></i>Sitasi
-            </a>
-            <a class="nav-link" href="#planner" data-bs-dismiss="offcanvas">
-                <i class="bi bi-calendar2-week me-2"></i>Study Planner
-            </a>
-            <a class="nav-link" href="#history" data-bs-dismiss="offcanvas">
-                <i class="bi bi-clock-history me-2"></i>Riwayat
-            </a>
-            <a class="nav-link" href="#ai-chat-drawer" data-bs-dismiss="offcanvas" data-open-chat>
-                <i class="bi bi-chat-dots me-2"></i>Tutor AI
-            </a>
-        </nav>
-
-        <div class="sidebar-card">
-            <div class="sidebar-heading">Fitur tersedia</div>
-            <div class="sidebar-stat">
-                <span>AI summary</span>
-                <strong>Detail & terarah</strong>
-            </div>
-            <div class="sidebar-stat">
-                <span>Flashcards</span>
-                <strong>Interaktif</strong>
-            </div>
-            <div class="sidebar-stat">
-                <span>Study plan</span>
-                <strong>Harian realistis</strong>
-            </div>
+    <div class="offcanvas-body d-flex flex-column gap-2 p-3">
+        <a class="mobile-nav-link" href="#text-tools" data-bs-dismiss="offcanvas">
+            <i class="bi bi-file-earmark-arrow-up me-2 text-muted"></i>PDF Rangkuman
+        </a>
+        <a class="mobile-nav-link" href="#flashcards" data-bs-dismiss="offcanvas">
+            <i class="bi bi-stack me-2 text-muted"></i>Flashcards & Kuis
+        </a>
+        <a class="mobile-nav-link" href="#citation" data-bs-dismiss="offcanvas">
+            <i class="bi bi-journal-text me-2 text-muted"></i>Sitasi
+        </a>
+        <a class="mobile-nav-link" href="#planner" data-bs-dismiss="offcanvas">
+            <i class="bi bi-calendar2-week me-2 text-muted"></i>Study Planner
+        </a>
+        <a class="mobile-nav-link" href="#history" data-bs-dismiss="offcanvas">
+            <i class="bi bi-clock-history me-2 text-muted"></i>Riwayat
+        </a>
+        <a class="mobile-nav-link" href="#ai-chat-drawer" data-bs-dismiss="offcanvas" data-open-chat>
+            <i class="bi bi-chat-dots me-2 text-muted"></i>Tutor AI
+        </a>
+        <div class="mt-auto pt-3 border-top" style="border-color: rgba(255,255,255,0.08) !important;">
+            <div class="small text-muted mb-2">Academic Study Companion</div>
+            <button type="button" class="btn-parlo-white w-100" data-open-chat data-bs-dismiss="offcanvas">
+                Tanya Tutor AI
+            </button>
         </div>
     </div>
 </div>
 
-<!-- Floating AI Tutor Chatbot -->
+{{-- ========================= FLOATING AI TUTOR CHATBOT ========================= --}}
 <div id="ai-chat-widget" class="ai-chat-widget">
     <!-- Floating Launcher Button -->
-    <button type="button" class="chat-launcher-btn shadow" data-toggle-chat aria-label="Buka Chat Tutor AI">
+    <button type="button" class="chat-launcher-btn" data-toggle-chat aria-label="Buka Chat Tutor AI">
         <i class="bi bi-chat-dots-fill"></i>
-        <span class="chat-launcher-text">Tutor AI</span>
+        <span>Tutor AI</span>
         <span class="chat-launcher-dot"></span>
     </button>
 
     <!-- Floating Chat Window / Drawer -->
-    <div id="ai-chat-drawer" class="chat-drawer shadow-lg d-none" aria-hidden="true">
+    <div id="ai-chat-drawer" class="chat-drawer d-none" aria-hidden="true">
         <!-- Header -->
         <div class="chat-drawer-header">
             <div class="d-flex align-items-center gap-2">
@@ -204,10 +148,10 @@
                 </div>
             </div>
             <div class="d-flex align-items-center gap-1">
-                <button type="button" class="btn btn-sm btn-icon text-muted" data-chat-clear title="Hapus riwayat chat">
+                <button type="button" class="btn-icon" data-chat-clear title="Hapus riwayat chat">
                     <i class="bi bi-trash3"></i>
                 </button>
-                <button type="button" class="btn btn-sm btn-icon text-muted" data-chat-close title="Tutup">
+                <button type="button" class="btn-icon" data-chat-close title="Tutup">
                     <i class="bi bi-x-lg"></i>
                 </button>
             </div>
@@ -260,14 +204,14 @@
         <!-- Typing Indicator -->
         <div class="chat-typing d-none" data-chat-typing>
             <span></span><span></span><span></span>
-            <small class="text-muted ms-2">Tutor sedang berpikir...</small>
+            <small class="text-muted ms-2" style="font-size:0.75rem">Tutor sedang berpikir...</small>
         </div>
 
         <!-- Input Box -->
         <form class="chat-input-form" data-chat-form action="{{ route('ai.chat') }}">
             <textarea class="form-control chat-input" data-chat-input rows="1" placeholder="Tanyakan apa saja seputar pelajaranmu..." required></textarea>
-            <button type="submit" class="btn btn-primary-soft chat-send-btn" data-chat-send aria-label="Kirim pesan">
-                <i class="bi bi-send-fill"></i>
+            <button type="submit" class="chat-send-btn" data-chat-send aria-label="Kirim pesan">
+                <i class="bi bi-send-fill" style="font-size:0.85rem"></i>
             </button>
         </form>
     </div>
