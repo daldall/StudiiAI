@@ -380,9 +380,7 @@ PROMPT;
                         'body' => Str::limit($response->body(), 300),
                     ]);
 
-                    if ($response->status() === 404) {
-                        continue;
-                    }
+                    continue;
                 }
             } catch (Throwable $e) {
                 Log::warning('Gemini chat exception: ' . $e->getMessage(), [
@@ -489,12 +487,11 @@ TXT,
         // Dua percobaan HTTP + pemrosesan bisa melebihi batas default 30 detik.
         @set_time_limit(240);
 
-        $configuredModel = (string) (config('services.gemini.model') ?: 'gemini-3.8-flash');
+        $configuredModel = (string) (config('services.gemini.model') ?: 'gemini-3.5-flash-lite');
         $candidateModels = array_values(array_unique(array_filter([
             $configuredModel,
+            'gemini-3.5-flash-lite',
             'gemini-3.8-flash',
-            'gemini-2.0-flash',
-            'gemini-1.5-flash',
         ])));
 
         // Percobaan 2 hanya dipakai bila jawaban terpotong/JSON tidak valid:
@@ -561,12 +558,8 @@ TXT,
                             'body' => Str::limit($response->body(), 300),
                         ]);
 
-                        if ($response->status() === 404) {
-                            // Model deprecated atau tidak tersedia, coba model berikutnya
-                            break;
-                        }
-
-                        return null;
+                        // Bila terjadi 503 (overload), 404 (deprecated), 429, atau 5xx, coba model berikutnya
+                        break;
                     }
 
                     $json = $response->json();

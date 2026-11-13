@@ -442,13 +442,13 @@ function renderTextTools(data) {
 
 	const keyTermsHtml = keyTerms.length ? `
 		<div class="result-box mb-3">
-			<div class="fw-semibold mb-2">Istilah penting</div>
+			<div class="fw-semibold text-white mb-2">Istilah penting</div>
 			<ul class="result-bullets">
 				${keyTerms.map((item) => `
 					<li>
-						<div>
-							<div class="fw-semibold">${escapeHtml(item.term ?? '')}</div>
-							<div class="text-muted small">${escapeHtml(item.definition ?? '')}</div>
+						<div class="w-100">
+							<div class="result-point fw-semibold text-white">${escapeHtml(item.term ?? '')}</div>
+							<div class="result-explanation text-slate-300">${escapeHtml(item.definition ?? '')}</div>
 						</div>
 					</li>
 				`).join('')}
@@ -458,10 +458,10 @@ function renderTextTools(data) {
 
 	const reviewHtml = reviewQuestions.length ? `
 		<div class="result-box mb-3">
-			<div class="fw-semibold mb-2">Uji pemahamanmu</div>
-			<div class="text-muted small mb-2">Coba jawab dulu dalam hati sebelum membuka materi lagi.</div>
-			<ol class="mb-0 ps-3">
-				${reviewQuestions.map((question) => `<li class="mb-1">${escapeHtml(question)}</li>`).join('')}
+			<div class="fw-semibold text-white mb-2">Uji pemahamanmu</div>
+			<div class="text-slate-400 small mb-2">Coba jawab dulu dalam hati sebelum membuka materi lagi.</div>
+			<ol class="mb-0 ps-3 result-review-list">
+				${reviewQuestions.map((question) => `<li class="mb-1 text-slate-300">${escapeHtml(question)}</li>`).join('')}
 			</ol>
 		</div>
 	` : '';
@@ -471,8 +471,8 @@ function renderTextTools(data) {
 			<div class="result-head">
 				<div>
 					<div class="small text-uppercase text-muted fw-semibold letter-spacing">Output</div>
-					<h3 class="result-title">${escapeHtml(summary.title ?? 'Rangkuman')}</h3>
-					${sourceName ? `<div class="text-muted small">Sumber: ${escapeHtml(sourceName)}</div>` : ''}
+					<h3 class="result-title text-white">${escapeHtml(summary.title ?? 'Rangkuman')}</h3>
+					${sourceName ? `<div class="text-slate-400 small">Sumber: ${escapeHtml(sourceName)}</div>` : ''}
 				</div>
 				<button type="button" class="result-copy" data-copy-text="${escapeHtml(copyText)}">
 					<i class="bi bi-clipboard"></i>
@@ -481,27 +481,27 @@ function renderTextTools(data) {
 			</div>
 
 			<div class="result-box mb-3">
-				<div class="fw-semibold mb-2">Ringkasan sangat detail versi gampang</div>
-				<p class="mb-0">${escapeHtml(summary.plain_summary ?? 'Ringkasan singkat akan muncul di sini.')}</p>
+				<div class="fw-semibold text-white mb-2">Ringkasan sangat detail versi gampang</div>
+				<p class="mb-0 result-plain-text">${escapeHtml(summary.plain_summary ?? 'Ringkasan singkat akan muncul di sini.')}</p>
 			</div>
 
 			<div class="result-box mb-3">
-				<div class="fw-semibold mb-2">Poin penting dan penjelasan</div>
+				<div class="fw-semibold text-white mb-2">Poin penting dan penjelasan</div>
 				<ul class="result-bullets">
 					${summaryBullets.map((bullet) => {
 						if (bullet && typeof bullet === 'object') {
 							return `
 								<li>
-									<div>
-										<div class="fw-semibold">${escapeHtml(bullet.point ?? '')}</div>
-										<div class="text-muted small">${escapeHtml(bullet.explanation ?? '')}</div>
+									<div class="w-100">
+										<div class="result-point fw-semibold text-white">${escapeHtml(bullet.point ?? '')}</div>
+										<div class="result-explanation text-slate-300">${escapeHtml(bullet.explanation ?? '')}</div>
 									</div>
 								</li>
 							`;
 						}
 
-						return `<li>${escapeHtml(bullet)}</li>`;
-					}).join('') || '<li>Belum ada poin.</li>'}
+						return `<li><span class="text-slate-300">${escapeHtml(bullet)}</span></li>`;
+					}).join('') || '<li class="text-slate-400">Belum ada poin.</li>'}
 				</ul>
 			</div>
 
